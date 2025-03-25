@@ -21,7 +21,7 @@ describe("Owner", function () {
     const BatchDeposit = await ethers.getContractFactory("BatchDeposit");
     contract = await BatchDeposit.deploy(
       await depositContract.getAddress(),
-      fee
+      fee,
     );
     await contract.waitForDeployment();
   });
@@ -49,13 +49,13 @@ describe("Owner", function () {
     const newFee = ethers.parseUnits("2", "ether");
 
     await expect(
-      contract.connect(addr2).changeFee(newFee)
+      contract.connect(addr2).changeFee(newFee),
     ).to.be.revertedWithCustomError(contract, "OwnableUnauthorizedAccount");
   });
 
   it("should not renounce ownership", async function () {
     await expect(
-      contract.connect(owner).renounceOwnership()
+      contract.connect(owner).renounceOwnership(),
     ).to.be.revertedWith("Ownable: renounceOwnership is disabled");
   });
 });

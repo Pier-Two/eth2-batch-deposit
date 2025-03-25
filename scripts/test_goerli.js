@@ -42,7 +42,7 @@ const batching_address = "0x6652780fd987ba19fb53bc36166ac3f3888841da";
 
 const batching_contract = new web3.eth.Contract(
   batching_abi.abi,
-  batching_address
+  batching_address,
 );
 
 async function main() {
@@ -54,7 +54,7 @@ async function main() {
     const depositAmount = ether(web3.utils.toBN(32 * fakeData.pubkeys.length));
     const fee = web3.utils.toBN("1000000000");
     const value = depositAmount.add(
-      fee.mul(web3.utils.toBN(fakeData.pubkeys.length))
+      fee.mul(web3.utils.toBN(fakeData.pubkeys.length)),
     );
     const gas_price = await web3.eth.getGasPrice();
     const gas_price_scalar = 2;
@@ -63,7 +63,7 @@ async function main() {
         fakeData.pubkeys,
         fakeData.creds,
         fakeData.signatures,
-        fakeData.dataRoots
+        fakeData.dataRoots,
       )
       .send({
         from: accounts[0],

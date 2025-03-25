@@ -69,7 +69,8 @@ contract BatchDeposit is Pausable, Ownable {
     uint256 constant SIGNATURE_LENGTH = 96;
     uint256 constant CREDENTIALS_LENGTH = 32;
     uint256 constant MAX_VALIDATORS = 100;
-    uint256 constant DEPOSIT_AMOUNT = 32 ether;
+    uint256 constant MAX_DEPOSIT_AMOUNT = 2048 ether;
+    uint256 constant MIN_DEPOSIT_AMOUNT = 32 ether;
 
     event FeeChanged(uint256 previousFee, uint256 newFee);
     event Withdrawn(address indexed payee, uint256 weiAmount);
@@ -84,37 +85,65 @@ contract BatchDeposit is Pausable, Ownable {
 
     /**
      * @dev Performs a batch deposit, asking for an additional fee payment.
+     * @param pubkeys Array of validator public keys
+     * @param withdrawal_credentials Withdrawal credentials for all validators
+     * @param signatures Array of validator signatures
+     * @param deposit_data_roots Array of deposit data roots
+     * @param amounts Array of deposit amounts for each validator (in wei)
      */
     function batchDeposit(
         bytes calldata pubkeys, 
         bytes calldata withdrawal_credentials, 
         bytes calldata signatures, 
-        bytes32[] calldata deposit_data_roots
+        bytes32[] calldata deposit_data_roots,
+        uint256[] calldata amounts
     ) 
         external payable whenNotPaused 
     {
         // sanity checks
         require(msg.value % 1 gwei == 0, "BatchDeposit: Deposit value not multiple of GWEI");
-        require(msg.value >= DEPOSIT_AMOUNT, "BatchDeposit: Amount is too low");
-
+        
         uint256 count = deposit_data_roots.length;
         require(count > 0, "BatchDeposit: You should deposit at least one validator");
         require(count <= MAX_VALIDATORS, "BatchDeposit: You can deposit max 100 validators at a time");
+        require(count == amounts.length, "BatchDeposit: Amounts array length must match validator count");
 
         require(pubkeys.length == count * PUBKEY_LENGTH, "BatchDeposit: Pubkey count don't match");
         require(signatures.length == count * SIGNATURE_LENGTH, "BatchDeposit: Signatures count don't match");
         require(withdrawal_credentials.length == 1 * CREDENTIALS_LENGTH, "BatchDeposit: Withdrawal Credentials count don't match");
 
-        uint256 expectedAmount = (_fee + DEPOSIT_AMOUNT) * count;
-        require(msg.value == expectedAmount, "BatchDeposit: Amount is not aligned with pubkeys number");
+        uint256 totalDepositAmount = 0;
+        for (uint256 i = 0; i < count; ++i) {
+            require(amounts[i] >= MIN_DEPOSIT_AMOUNT, "BatchDeposit: Amount is too low");
+            require(amounts[i] <= MAX_DEPOSIT_AMOUNT, "BatchDeposit: Amount exceeds maximum");
+            require(amounts[i] % 1 gwei == 0, "BatchDeposit: Amount must be multiple of GWEI");
+            totalDepositAmount += amounts[i];
+        }
+
+        uint256 expectedAmount = totalDepositAmount + (_fee * count);
+        require(msg.value == expectedAmount, "BatchDeposit: Amount is not aligned with validator amounts");
 
         emit FeeCollected(msg.sender, _fee * count);
 
+        _processDeposits(pubkeys, withdrawal_credentials, signatures, deposit_data_roots, amounts);
+    }
+
+    /**
+     * @dev Internal function to process deposits
+     */
+    function _processDeposits(
+        bytes calldata pubkeys,
+        bytes calldata withdrawal_credentials,
+        bytes calldata signatures,
+        bytes32[] calldata deposit_data_roots,
+        uint256[] calldata amounts
+    ) internal {
+        uint256 count = deposit_data_roots.length;
         for (uint256 i = 0; i < count; ++i) {
             bytes memory pubkey = bytes(pubkeys[i*PUBKEY_LENGTH:(i+1)*PUBKEY_LENGTH]);
             bytes memory signature = bytes(signatures[i*SIGNATURE_LENGTH:(i+1)*SIGNATURE_LENGTH]);
 
-            IDepositContract(depositContract).deposit{value: DEPOSIT_AMOUNT}(
+            IDepositContract(depositContract).deposit{value: amounts[i]}(
                 pubkey,
                 withdrawal_credentials,
                 signature,

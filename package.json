@@ -12,11 +12,13 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "hardhat": "^2.19.5",
+    "prettier": "^3.5.3",
     "solidity-coverage": "^0.8.5"
   },
   "scripts": {
     "test": "hardhat test",
-    "coverage": "hardhat coverage"
+    "coverage": "hardhat coverage",
+    "format": "prettier --write ."
   },
   "author": "",
   "license": "ISC"
