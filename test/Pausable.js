@@ -1,78 +1,81 @@
-var BatchDeposit = artifacts.require("BatchDeposit");
-const assert = require("chai").assert;
-const truffleAssert = require("truffle-assertions");
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
 
 // 1 gwei fee
-const fee = web3.utils.toWei("1", "gwei");
+const fee = ethers.parseUnits("1", "gwei");
 
-contract("BatchDeposit", async (accounts) => {
-  it("should not pause contract", async () => {
-    let contract = await BatchDeposit.deployed();
+describe("BatchDeposit", function () {
+  let contract;
+  let depositContract;
+  let owner;
+  let addr1;
+  let addr2;
 
-    await truffleAssert.reverts(
-      contract.pause({
-        from: accounts[2],
-      }),
-      "Ownable: caller is not the owner"
+  beforeEach(async function () {
+    [owner, addr1, addr2] = await ethers.getSigners();
+
+    // Deploy the deposit contract first
+    const DepositContract = await ethers.getContractFactory("DepositContract");
+    depositContract = await DepositContract.deploy();
+    await depositContract.waitForDeployment();
+
+    const BatchDeposit = await ethers.getContractFactory("BatchDeposit");
+    contract = await BatchDeposit.deploy(
+      await depositContract.getAddress(),
+      fee
+    );
+    await contract.waitForDeployment();
+  });
+
+  it("should not pause contract", async function () {
+    await expect(contract.connect(addr2).pause()).to.be.revertedWithCustomError(
+      contract,
+      "OwnableUnauthorizedAccount"
     );
   });
 
-  it("should pause the contract", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should pause the contract", async function () {
+    const tx = await contract.pause();
+    const receipt = await tx.wait();
 
-    var res = await contract.pause({ from: accounts[0] });
-
-    assert.equal(
-      res.receipt.rawLogs.length,
-      1,
-      "events are not 1 as expected!"
-    );
-
-    var paused = await contract.paused();
-    assert.equal(paused, true, "contract is not paused");
+    expect(receipt.logs.length).to.equal(1);
+    const paused = await contract.paused();
+    expect(paused).to.be.true;
   });
 
-  it("should not deposit if contract is paused", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should not deposit if contract is paused", async function () {
+    await contract.pause();
 
-    await truffleAssert.reverts(
-      contract.batchDeposit(
-        ["0x00000", "0x00000"],
-        "0x00000",
-        ["0x00000", "0x00000"],
-        ["0x00000", "0x00000"],
-        {
-          value: "1000000000000",
-          from: accounts[1],
-        }
-      ),
-      "Pausable: paused"
-    );
+    await expect(
+      contract
+        .connect(addr1)
+        .batchDeposit(
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          [
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+          ],
+          {
+            value: ethers.parseUnits("1000", "gwei"),
+          }
+        )
+    ).to.be.revertedWithCustomError(contract, "EnforcedPause");
   });
 
-  it("should not unpause contract", async () => {
-    let contract = await BatchDeposit.deployed();
-
-    await truffleAssert.reverts(
-      contract.unpause({
-        from: accounts[2],
-      }),
-      "Ownable: caller is not the owner"
-    );
+  it("should not unpause contract", async function () {
+    await expect(
+      contract.connect(addr2).unpause()
+    ).to.be.revertedWithCustomError(contract, "OwnableUnauthorizedAccount");
   });
 
-  it("should unpause the contract", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should unpause the contract", async function () {
+    await contract.pause();
+    const tx = await contract.unpause();
+    const receipt = await tx.wait();
 
-    var res = await contract.unpause({ from: accounts[0] });
-
-    assert.equal(
-      res.receipt.rawLogs.length,
-      1,
-      "events are not 1 as expected!"
-    );
-
-    var paused = await contract.paused();
-    assert.equal(paused, false, "contract is not paused");
+    expect(receipt.logs.length).to.equal(1);
+    const paused = await contract.paused();
+    expect(paused).to.be.false;
   });
 });

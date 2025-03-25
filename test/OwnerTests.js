@@ -1,68 +1,61 @@
-var BatchDeposit = artifacts.require("BatchDeposit");
-const assert = require("chai").assert;
-const truffleAssert = require("truffle-assertions");
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
 
 // 1 gwei fee
-const fee = web3.utils.toWei("1", "gwei");
+const fee = ethers.parseUnits("1", "gwei");
 
-contract("BatchDeposit", async (accounts) => {
-  it("initial fee should be 1 gwei", async () => {
-    let contract = await BatchDeposit.deployed();
+describe("BatchDeposit", function () {
+  let contract;
+  let depositContract;
+  let owner;
+  let addr1;
+  let addr2;
 
-    var currentFee = await contract.fee();
+  beforeEach(async function () {
+    [owner, addr1, addr2] = await ethers.getSigners();
 
-    assert.equal(currentFee, "1000000000");
+    // Deploy the deposit contract first
+    const DepositContract = await ethers.getContractFactory("DepositContract");
+    depositContract = await DepositContract.deploy();
+    await depositContract.waitForDeployment();
+
+    const BatchDeposit = await ethers.getContractFactory("BatchDeposit");
+    contract = await BatchDeposit.deploy(
+      await depositContract.getAddress(),
+      fee
+    );
+    await contract.waitForDeployment();
   });
 
-  it("should change fee", async () => {
-    let contract = await BatchDeposit.deployed();
-
-    var currentFee = await contract.fee();
-    var newFee = new web3.utils.BN(web3.utils.toWei("1", "ether"));
-
-    let res = await contract.changeFee(newFee, {
-      from: accounts[0],
-    });
-
-    assert.equal(
-      res.receipt.rawLogs.length,
-      1,
-      "events are not 1 as expected!"
-    );
-
-    var updatedFee = await contract.fee();
-
-    assert.equal(
-      newFee.toString(),
-      updatedFee.toString(),
-      "new fee is not set correctly"
-    );
-
-    assert.notEqual(
-      currentFee.toString(),
-      updatedFee.toString(),
-      "new fee is not set correctly"
-    );
+  it("initial fee should be 1 gwei", async function () {
+    const currentFee = await contract.fee();
+    expect(currentFee).to.equal(ethers.parseUnits("1", "gwei"));
   });
 
-  it("should not change fee", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should change fee", async function () {
+    const currentFee = await contract.fee();
+    const newFee = ethers.parseUnits("1", "ether");
 
-    var newFee = new web3.utils.BN(web3.utils.toWei("2", "ether"));
+    const tx = await contract.changeFee(newFee);
+    const receipt = await tx.wait();
 
-    await truffleAssert.reverts(
-      contract.changeFee(newFee, {
-        from: accounts[2],
-      }),
-      "Ownable: caller is not the owner"
-    );
+    expect(receipt.logs.length).to.equal(1);
+    const updatedFee = await contract.fee();
+
+    expect(newFee).to.equal(updatedFee);
+    expect(currentFee).to.not.equal(updatedFee);
   });
 
-  it("should not renounce ownership", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should not change fee", async function () {
+    const newFee = ethers.parseUnits("2", "ether");
 
-    await truffleAssert.reverts(
-      contract.renounceOwnership({ from: accounts[0] }),
+    await expect(
+      contract.connect(addr2).changeFee(newFee)
+    ).to.be.revertedWithCustomError(contract, "OwnableUnauthorizedAccount");
+  });
+
+  it("should not renounce ownership", async function () {
+    await expect(contract.renounceOwnership()).to.be.revertedWith(
       "Ownable: renounceOwnership is disabled"
     );
   });

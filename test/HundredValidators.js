@@ -4,73 +4,80 @@
   truffle test --network coverage
 */
 
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
 // var BatchDeposit = artifacts.require("BatchDeposit");
 // const assert = require("chai").assert;
 // const truffleAssert = require("truffle-assertions");
 
-// // 1 gwei fee
-// const fee = web3.utils.toWei("1", "gwei");
+// 1 gwei fee
+const fee = ethers.parseUnits("1", "gwei");
 
-// // Fake deposits
-// var fakeData = {
-//   pubkey:
-//     "b397443cf61fbb6286550d9ef9b58a033deeb0378fe504ec09978d94eb87aedea244892853b994e27d6f77133fce723e",
+// Fake deposits
+const fakeData = {
+  pubkey:
+    "b397443cf61fbb6286550d9ef9b58a033deeb0378fe504ec09978d94eb87aedea244892853b994e27d6f77133fce723e",
 
-//   creds: "0x00e53ca56e7f6412ca6024989d8a37cb0520d70d7e3472bf08fc629816603b5c",
+  creds: "0x00e53ca56e7f6412ca6024989d8a37cb0520d70d7e3472bf08fc629816603b5c",
 
-//   signature:
-//     "a45d0dd7c44a73209d2377fbc3ded47e5af5ee38ade2e08c53551dd34b98248b8a1e1feb1912fb024033435927d47ad70adf10b1ee4a65bfc8ae1501962dee655bfeb5cefdff3389c2d9eadcc6fdc4e8ed340f0414b684168146c15aa4edbfed",
+  signature:
+    "a45d0dd7c44a73209d2377fbc3ded47e5af5ee38ade2e08c53551dd34b98248b8a1e1feb1912fb024033435927d47ad70adf10b1ee4a65bfc8ae1501962dee655bfeb5cefdff3389c2d9eadcc6fdc4e8ed340f0414b684168146c15aa4edbfed",
 
-//   dataRoots:
-//     "0x2c16c5739ec31a951e5551e828ef57ee2d6944b36cf674db9f884173289c7946",
-// };
+  dataRoots:
+    "0x2c16c5739ec31a951e5551e828ef57ee2d6944b36cf674db9f884173289c7946",
+};
 
-// contract("BatchDeposit", async (accounts) => {
-//   it("can deposit 100 validators in one shot", async () => {
-//     let contract = await BatchDeposit.deployed();
+describe("BatchDeposit", function () {
+  let contract;
+  let depositContract;
+  let owner;
+  let addr1;
+  let addr2;
 
-//     var amountEth = web3.utils.toBN(32 * 100);
-//     var amountWei = new web3.utils.BN(web3.utils.toWei(amountEth, "ether"));
+  beforeEach(async function () {
+    [owner, addr1, addr2] = await ethers.getSigners();
 
-//     var stakefishFee = new web3.utils.BN(fee).mul(
-//       // web3.utils.toBN(fakeData.pubkeys.length)
-//       web3.utils.toBN("100")
-//     );
+    // Deploy the deposit contract first
+    const DepositContract = await ethers.getContractFactory("DepositContract");
+    depositContract = await DepositContract.deploy();
+    await depositContract.waitForDeployment();
 
-//     amountWei = amountWei.add(stakefishFee);
+    const BatchDeposit = await ethers.getContractFactory("BatchDeposit");
+    contract = await BatchDeposit.deploy(
+      await depositContract.getAddress(),
+      fee
+    );
+    await contract.waitForDeployment();
+  });
 
-//     var pubkeys = "0x";
-//     var signatures = "0x";
-//     var dataRoots = [];
+  it("can deposit 100 validators in one shot", async function () {
+    const amountEth = 32 * 100;
+    const amountWei = ethers.parseEther(amountEth.toString());
+    const stakefishFee = fee * 100n;
+    const totalAmount = amountWei + stakefishFee;
 
-//     for (var i = 0; i < 100; i++) {
-//       pubkeys += fakeData.pubkey;
-//       signatures += fakeData.signature;
-//       dataRoots.push(fakeData.dataRoots);
-//     }
+    let pubkeys = "0x";
+    let signatures = "0x";
+    const dataRoots = [];
 
-//     let res = await contract.batchDeposit(
-//       pubkeys,
-//       fakeData.creds,
-//       signatures,
-//       dataRoots,
-//       {
-//         value: amountWei,
-//         from: accounts[1],
-//       }
-//     );
+    for (let i = 0; i < 100; i++) {
+      pubkeys += fakeData.pubkey;
+      signatures += fakeData.signature;
+      dataRoots.push(fakeData.dataRoots);
+    }
 
-//     assert.equal(
-//       res.receipt.rawLogs.length,
-//       101,
-//       "events are not 101 as expected!"
-//     );
+    const tx = await contract
+      .connect(addr1)
+      .batchDeposit(pubkeys, fakeData.creds, signatures, dataRoots, {
+        value: totalAmount,
+      });
 
-//     // Check that we have fee in the contract balance
-//     assert.equal(
-//       await web3.eth.getBalance(contract.address),
-//       stakefishFee,
-//       "fee was not collected by the smart contract"
-//     );
-//   });
-// });
+    const receipt = await tx.wait();
+    expect(receipt.logs.length).to.equal(101);
+
+    // Check that we have fee in the contract balance
+    const balance = await ethers.provider.getBalance(contract.target);
+    expect(balance).to.equal(stakefishFee);
+  });
+});

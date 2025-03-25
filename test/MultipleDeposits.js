@@ -1,12 +1,11 @@
-var BatchDeposit = artifacts.require("BatchDeposit");
-const assert = require("chai").assert;
-const truffleAssert = require("truffle-assertions");
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
 
 // 1 gwei fee
-const fee = web3.utils.toWei("1", "gwei");
+const fee = ethers.parseUnits("1", "gwei");
 
 // Fake deposits
-var fakeData = {
+const fakeData = {
   pubkeys:
     "0xb397443cf61fbb6286550d9ef9b58a033deeb0378fe504ec09978d94eb87aedea244892853b994e27d6f77133fce723ea50e1dfc528fe61d7c0b3bc118f94e7090e1b0b80328a8ec66783cecd74d3fc51459c76f2940dc905b9a32b34220945b881e7056817dce7ac795b592f309c7b681ea7e5eadc5cfd39871112b69103e396ce91d0a3a9a333cb4f213ed43add094",
   creds: "0x00e53ca56e7f6412ca6024989d8a37cb0520d70d7e3472bf08fc629816603b5c",
@@ -21,150 +20,130 @@ var fakeData = {
   ],
 };
 
-contract("BatchDeposit", async (accounts) => {
-  it("can perform multiple deposits in one tx", async () => {
-    let contract = await BatchDeposit.deployed();
+describe("BatchDeposit", function () {
+  let contract;
+  let depositContract;
+  let owner;
+  let addr1;
+  let addr2;
+  let addr6;
 
-    var amountEth = web3.utils.toBN(32 * 3);
-    var amountWei = new web3.utils.BN(web3.utils.toWei(amountEth, "ether"));
+  beforeEach(async function () {
+    [owner, addr1, addr2, , , , addr6] = await ethers.getSigners();
 
-    var stakefishFee = new web3.utils.BN(fee).mul(
-      // web3.utils.toBN(fakeData.pubkeys.length)
-      web3.utils.toBN("3")
+    // Deploy the deposit contract first
+    const DepositContract = await ethers.getContractFactory("DepositContract");
+    depositContract = await DepositContract.deploy();
+    await depositContract.waitForDeployment();
+
+    const BatchDeposit = await ethers.getContractFactory("BatchDeposit");
+    contract = await BatchDeposit.deploy(
+      await depositContract.getAddress(),
+      fee
     );
+    await contract.waitForDeployment();
+  });
 
-    amountWei = amountWei.add(stakefishFee);
+  it("can perform multiple deposits in one tx", async function () {
+    const amountEth = 32 * 3;
+    const amountWei = ethers.parseEther(amountEth.toString());
+    const stakefishFee = fee * 3n;
+    const totalAmount = amountWei + stakefishFee;
 
-    let res = await contract.batchDeposit(
-      fakeData.pubkeys,
-      fakeData.creds,
-      fakeData.signatures,
-      fakeData.dataRoots,
-      {
-        value: amountWei,
-        from: accounts[1],
-      }
-    );
+    const tx = await contract
+      .connect(addr1)
+      .batchDeposit(
+        fakeData.pubkeys,
+        fakeData.creds,
+        fakeData.signatures,
+        fakeData.dataRoots,
+        {
+          value: totalAmount,
+        }
+      );
 
-    assert.equal(
-      res.receipt.rawLogs.length,
-      4,
-      "events are not 4 as expected!"
-    );
+    const receipt = await tx.wait();
+    expect(receipt.logs.length).to.equal(4);
 
     // Check that we have fee in the contract balance
-    assert.equal(
-      await web3.eth.getBalance(contract.address),
-      stakefishFee,
-      "fee was not collected by the smart contract"
-    );
+    const balance = await ethers.provider.getBalance(contract.target);
+    expect(balance).to.equal(stakefishFee);
 
-    // check owner is account 0
-    assert.equal(
-      await contract.owner(),
-      accounts[0],
-      "contract owner is wrong"
-    );
+    // check owner is correct
+    expect(await contract.owner()).to.equal(owner.address);
   });
 
-  it("should revert if amount is not enough", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should revert if amount is not enough", async function () {
+    const amountEth = 10;
+    const amountWei = ethers.parseEther(amountEth.toString());
 
-    var amountEth = web3.utils.toBN(10);
-    var amountWei = new web3.utils.BN(web3.utils.toWei(amountEth, "ether"));
-
-    await truffleAssert.reverts(
-      contract.batchDeposit(
-        fakeData.pubkeys,
-        fakeData.creds,
-        fakeData.signatures,
-        fakeData.dataRoots,
-        {
-          value: amountWei,
-          from: accounts[2],
-        }
-      ),
-      "BatchDeposit: Amount is too low"
-    );
+    await expect(
+      contract
+        .connect(addr2)
+        .batchDeposit(
+          fakeData.pubkeys,
+          fakeData.creds,
+          fakeData.signatures,
+          fakeData.dataRoots,
+          {
+            value: amountWei,
+          }
+        )
+    ).to.be.revertedWith("BatchDeposit: Amount is too low");
   });
 
-  it("should revert if fee is missing", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should revert if fee is missing", async function () {
+    const amountEth = 32 * 3;
+    const amountWei = ethers.parseEther(amountEth.toString());
 
-    var amountEth = web3.utils.toBN(32 * 3);
-    var amountWei = new web3.utils.BN(web3.utils.toWei(amountEth, "ether"));
-
-    await truffleAssert.reverts(
-      contract.batchDeposit(
-        fakeData.pubkeys,
-        fakeData.creds,
-        fakeData.signatures,
-        fakeData.dataRoots,
-        {
-          value: amountWei,
-          from: accounts[2],
-        }
-      ),
+    await expect(
+      contract
+        .connect(addr2)
+        .batchDeposit(
+          fakeData.pubkeys,
+          fakeData.creds,
+          fakeData.signatures,
+          fakeData.dataRoots,
+          {
+            value: amountWei,
+          }
+        )
+    ).to.be.revertedWith(
       "BatchDeposit: Amount is not aligned with pubkeys number"
     );
   });
 
-  it("should change owner", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should change owner", async function () {
+    // check owner is correct
+    expect(await contract.owner()).to.equal(owner.address);
 
-    // check owner is account 0
-    assert.equal(
-      await contract.owner(),
-      accounts[0],
-      "contract owner is wrong"
-    );
+    // transfer ownership to addr2
+    await contract.transferOwnership(addr2.address);
 
-    // transfer ownershipt to account 2
-    let res = await contract.transferOwnership(accounts[2], {
-      from: accounts[0],
-    });
-
-    // check owner is account 2
-    assert.equal(
-      await contract.owner(),
-      accounts[2],
-      "contract owner is not changed"
-    );
+    // check owner is addr2
+    expect(await contract.owner()).to.equal(addr2.address);
   });
 
-  it("should not withdraw", async () => {
-    let contract = await BatchDeposit.deployed();
-
-    await truffleAssert.reverts(
-      contract.withdraw(accounts[6], { from: accounts[1] }),
-      "Ownable: caller is not the owner"
-    );
+  it("should not withdraw", async function () {
+    await expect(
+      contract.connect(addr1).withdraw(addr6.address)
+    ).to.be.revertedWithCustomError(contract, "OwnableUnauthorizedAccount");
   });
 
-  it("should withdraw the fees", async () => {
-    let contract = await BatchDeposit.deployed();
+  it("should withdraw the fees", async function () {
+    const fees = await ethers.provider.getBalance(contract.target);
+    const curBal = await ethers.provider.getBalance(addr6.address);
 
-    let fees = await web3.eth.getBalance(contract.address);
-    let curBal = await web3.eth.getBalance(accounts[6]);
-
-    let res = await contract.withdraw(accounts[6], { from: accounts[2] });
-    assert.equal(
-      res.receipt.rawLogs.length,
-      1,
-      "events are not 1 as expected!"
-    );
+    const tx = await contract.connect(owner).withdraw(addr6.address);
+    const receipt = await tx.wait();
+    expect(receipt.logs.length).to.equal(1);
 
     // Check that we have fee in the contract balance
-    assert.equal(
-      await web3.eth.getBalance(contract.address),
-      0,
-      "contract balance is not 0"
-    );
+    const newContractBal = await ethers.provider.getBalance(contract.target);
+    expect(newContractBal).to.equal(0n);
 
-    let newBal = await web3.eth.getBalance(accounts[6]);
-
-    let diff = web3.utils.toBN(newBal).sub(web3.utils.toBN(curBal));
-
-    assert.equal(diff.toString(), fees, "eth has not been trasfered");
+    const newBal = await ethers.provider.getBalance(addr6.address);
+    const diff = newBal - curBal;
+    expect(diff).to.equal(fees);
   });
 });

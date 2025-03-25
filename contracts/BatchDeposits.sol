@@ -1,4 +1,3 @@
-
 //                                                                           ,,---.
 //                                                                         .-^^,_  `.
 //                                                                    ;`, / 3 ( o\   }
@@ -21,11 +20,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pragma solidity 0.6.11;
+pragma solidity 0.8.29;
 
-import "../node_modules/@openzeppelin/contracts/utils/Pausable.sol";
-import "../node_modules/@openzeppelin/contracts/access/Ownable.sol";
-import "../node_modules/@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 // Deposit contract interface
 interface IDepositContract {
@@ -62,8 +60,6 @@ interface IDepositContract {
 
 
 contract BatchDeposit is Pausable, Ownable {
-    using SafeMath for uint256;
-
     address depositContract;
     uint256 private _fee;
 
@@ -77,7 +73,7 @@ contract BatchDeposit is Pausable, Ownable {
     event Withdrawn(address indexed payee, uint256 weiAmount);
     event FeeCollected(address indexed payee, uint256 weiAmount);
 
-    constructor(address depositContractAddr, uint256 initialFee) public {
+    constructor(address depositContractAddr, uint256 initialFee) Pausable() Ownable(msg.sender) {
         require(initialFee % 1 gwei == 0, "Fee must be a multiple of GWEI");
 
         depositContract = depositContractAddr;
@@ -107,10 +103,10 @@ contract BatchDeposit is Pausable, Ownable {
         require(signatures.length == count * SIGNATURE_LENGTH, "BatchDeposit: Signatures count don't match");
         require(withdrawal_credentials.length == 1 * CREDENTIALS_LENGTH, "BatchDeposit: Withdrawal Credentials count don't match");
 
-        uint256 expectedAmount = _fee.add(DEPOSIT_AMOUNT).mul(count);
+        uint256 expectedAmount = (_fee + DEPOSIT_AMOUNT) * count;
         require(msg.value == expectedAmount, "BatchDeposit: Amount is not aligned with pubkeys number");
 
-        emit FeeCollected(msg.sender, _fee.mul(count));
+        emit FeeCollected(msg.sender, _fee * count);
 
         for (uint256 i = 0; i < count; ++i) {
             bytes memory pubkey = bytes(pubkeys[i*PUBKEY_LENGTH:(i+1)*PUBKEY_LENGTH]);
@@ -183,7 +179,7 @@ contract BatchDeposit is Pausable, Ownable {
     /**
      * Disable renunce ownership
      */
-    function renounceOwnership() public override onlyOwner {
+    function renounceOwnership() public view override onlyOwner {
         revert("Ownable: renounceOwnership is disabled");
     }
 }
