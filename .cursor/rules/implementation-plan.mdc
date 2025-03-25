@@ -20,4 +20,7 @@ Converting project to new versions and packages as well as updating the contract
 5. Make sure contract compiles - Done
    All contracts compile successfully with Solidity 0.8.29 and all 16 tests are passing.
 
-6. Upgrade the [BatchDeposits.sol](mdc:contracts/BatchDeposits.sol) contract to support new Ethereum Electra/Pectra upgrade, which allows to stake up to 2048ETH per validator instead of 32ETH per validator. Consider scenario that now we can stake multiple validators with different amounts. Update tests, write new ones.
+6. Upgrade the [BatchDeposits.sol](mdc:contracts/BatchDeposits.sol) contract to support new Ethereum Electra/Pectra upgrade, which allows to stake up to 2048ETH per validator instead of 32ETH per validator. Consider scenario that now we can stake multiple validators with different amounts. Update tests, write new ones. - Done
+   Updated BatchDeposits.sol to support variable validator amounts between 32ETH and 2048ETH. Added new constants MAX_DEPOSIT_AMOUNT and MIN_DEPOSIT_AMOUNT. Modified batchDeposit function to accept amounts array and validate each validator's deposit amount.
+
+7. Create deployment script for the BatchDeposit contract using harhat.
