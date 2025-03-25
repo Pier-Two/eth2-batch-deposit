@@ -28,7 +28,7 @@ const fakeData = {
     "0x2c16c5739ec31a951e5551e828ef57ee2d6944b36cf674db9f884173289c7946",
 };
 
-describe("BatchDeposit", function () {
+describe("HundredValidators", function () {
   let contract;
   let depositContract;
   let owner;
@@ -79,5 +79,8 @@ describe("BatchDeposit", function () {
     // Check that we have fee in the contract balance
     const balance = await ethers.provider.getBalance(contract.target);
     expect(balance).to.equal(stakefishFee);
+
+    // check owner is correct
+    expect(await contract.owner()).to.equal(owner.address);
   });
 });

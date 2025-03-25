@@ -20,7 +20,7 @@ const fakeData = {
   ],
 };
 
-describe("BatchDeposit", function () {
+describe("MultipleDeposits", function () {
   let contract;
   let depositContract;
   let owner;
@@ -118,7 +118,7 @@ describe("BatchDeposit", function () {
     expect(await contract.owner()).to.equal(owner.address);
 
     // transfer ownership to addr2
-    await contract.transferOwnership(addr2.address);
+    await contract.connect(owner).transferOwnership(addr2.address);
 
     // check owner is addr2
     expect(await contract.owner()).to.equal(addr2.address);

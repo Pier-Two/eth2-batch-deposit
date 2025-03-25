@@ -4,15 +4,14 @@ const { ethers } = require("hardhat");
 // 1 gwei fee
 const fee = ethers.parseUnits("1", "gwei");
 
-describe("BatchDeposit", function () {
+describe("Owner", function () {
   let contract;
   let depositContract;
   let owner;
-  let addr1;
   let addr2;
 
   beforeEach(async function () {
-    [owner, addr1, addr2] = await ethers.getSigners();
+    [owner, _, addr2] = await ethers.getSigners();
 
     // Deploy the deposit contract first
     const DepositContract = await ethers.getContractFactory("DepositContract");
@@ -36,7 +35,7 @@ describe("BatchDeposit", function () {
     const currentFee = await contract.fee();
     const newFee = ethers.parseUnits("1", "ether");
 
-    const tx = await contract.changeFee(newFee);
+    const tx = await contract.connect(owner).changeFee(newFee);
     const receipt = await tx.wait();
 
     expect(receipt.logs.length).to.equal(1);
@@ -55,8 +54,8 @@ describe("BatchDeposit", function () {
   });
 
   it("should not renounce ownership", async function () {
-    await expect(contract.renounceOwnership()).to.be.revertedWith(
-      "Ownable: renounceOwnership is disabled"
-    );
+    await expect(
+      contract.connect(owner).renounceOwnership()
+    ).to.be.revertedWith("Ownable: renounceOwnership is disabled");
   });
 });

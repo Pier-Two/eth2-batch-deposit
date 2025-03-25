@@ -4,7 +4,7 @@ const { ethers } = require("hardhat");
 // 1 gwei fee
 const fee = ethers.parseUnits("1", "gwei");
 
-describe("BatchDeposit", function () {
+describe("Pausable", function () {
   let contract;
   let depositContract;
   let owner;
@@ -35,7 +35,7 @@ describe("BatchDeposit", function () {
   });
 
   it("should pause the contract", async function () {
-    const tx = await contract.pause();
+    const tx = await contract.connect(owner).pause();
     const receipt = await tx.wait();
 
     expect(receipt.logs.length).to.equal(1);
@@ -44,7 +44,7 @@ describe("BatchDeposit", function () {
   });
 
   it("should not deposit if contract is paused", async function () {
-    await contract.pause();
+    await contract.connect(owner).pause();
 
     await expect(
       contract
@@ -70,8 +70,8 @@ describe("BatchDeposit", function () {
   });
 
   it("should unpause the contract", async function () {
-    await contract.pause();
-    const tx = await contract.unpause();
+    await contract.connect(owner).pause();
+    const tx = await contract.connect(owner).unpause();
     const receipt = await tx.wait();
 
     expect(receipt.logs.length).to.equal(1);
