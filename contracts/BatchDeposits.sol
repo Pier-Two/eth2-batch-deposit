@@ -24,6 +24,7 @@ pragma solidity 0.8.29;
 
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 // Deposit contract interface
 interface IDepositContract {
@@ -60,6 +61,7 @@ interface IDepositContract {
 
 
 contract BatchDeposit is Pausable, Ownable {
+    using Math for uint256;
     address depositContract;
     uint256 private _fee;
 
