@@ -1,0 +1,26 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Converting project to new versions and packages as well as updating the contract features.
+
+1. Convert the project to the Solidity 0.8.29 version and make sure it compiles - Done
+   Updated BatchDeposits.sol and DepositContract.sol to use Solidity 0.8.29. Removed SafeMath usage and updated constructor syntax.
+
+2. Remove all of the migrations - Done
+   Removed migrations directory and Migrations.sol contract as they are not needed with Hardhat.
+
+3. Remove chai, ganache-cli, solc, truggle, truffle-assertions and web3 packages and replace them with Hardhat version 2: https://hardhat.org/hardhat-runner/docs/getting-started#installation - Done
+   Updated package.json to use Hardhat and its tooling. Removed all Truffle-related dependencies.
+
+4. Rewrite the tests to use hardhat https://hardhat.org/hardhat-runner/docs/guides/test-contracts - Done
+   Converted all test files to use Hardhat/ethers.js syntax. Updated error handling to match OpenZeppelin v5 custom errors.
+
+5. Make sure contract compiles - Done
+   All contracts compile successfully with Solidity 0.8.29 and all 16 tests are passing.
+
+6. Upgrade the [BatchDeposits.sol](mdc:contracts/BatchDeposits.sol) contract to support new Ethereum Electra/Pectra upgrade, which allows to stake up to 2048ETH per validator instead of 32ETH per validator. Consider scenario that now we can stake multiple validators with different amounts. Update tests, write new ones. - Done
+   Updated BatchDeposits.sol to support variable validator amounts between 32ETH and 2048ETH. Added new constants MAX_DEPOSIT_AMOUNT and MIN_DEPOSIT_AMOUNT. Modified batchDeposit function to accept amounts array and validate each validator's deposit amount.
+
+7. Create deployment script for the BatchDeposit contract using harhat.

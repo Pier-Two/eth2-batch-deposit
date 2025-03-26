@@ -1,8 +1,8 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-// 1 gwei fee
-const fee = ethers.parseUnits("1", "gwei");
+// 0 gwei fee
+const fee = 0n;
 
 // Fake deposits for different amounts
 const depositData = {
@@ -35,16 +35,15 @@ const depositData = {
   },
 };
 
-describe("MultipleDeposits", function () {
+describe("BatchDeposit with Zero Fee", function () {
   let contract;
   let depositContract;
   let owner;
   let addr1;
   let addr2;
-  let addr6;
 
   beforeEach(async function () {
-    [owner, addr1, addr2, , , , addr6] = await ethers.getSigners();
+    [owner, addr1, addr2] = await ethers.getSigners();
 
     // Deploy the deposit contract first
     const DepositContract = await ethers.getContractFactory("DepositContract");
@@ -59,14 +58,18 @@ describe("MultipleDeposits", function () {
     await contract.waitForDeployment();
   });
 
-  it("can perform multiple deposits with different amounts in one tx", async function () {
+  it("should have zero fee", async function () {
+    expect(await contract.fee()).to.equal(0n);
+  });
+
+  it("can perform multiple deposits without fee", async function () {
     const amounts = [
       ethers.parseEther("32"), // 32 ETH
       ethers.parseEther("64"), // 64 ETH
       ethers.parseEther("128"), // 128 ETH
     ];
     const totalDepositAmount = amounts.reduce((a, b) => a + b, 0n);
-    const stakefishFee = fee * 3n;
+    const stakefishFee = fee * 3n; // Should be 0
     const totalAmount = totalDepositAmount + stakefishFee;
 
     // Create arrays for pubkeys and signatures
@@ -104,22 +107,19 @@ describe("MultipleDeposits", function () {
     const receipt = await tx.wait();
     expect(receipt.logs.length).to.equal(4);
 
-    // Check that we have fee in the contract balance
+    // Check that we have no fee in the contract balance
     const balance = await ethers.provider.getBalance(contract.target);
-    expect(balance).to.equal(stakefishFee);
-
-    // check owner is correct
-    expect(await contract.owner()).to.equal(owner.address);
+    expect(balance).to.equal(0n);
   });
 
-  it("should revert if amount is too low", async function () {
+  it("should revert if amount is too low even with zero fee", async function () {
     const amounts = [
       ethers.parseEther("16"), // 16 ETH (below minimum)
       ethers.parseEther("32"),
       ethers.parseEther("64"),
     ];
     const totalDepositAmount = amounts.reduce((a, b) => a + b, 0n);
-    const stakefishFee = fee * 3n;
+    const stakefishFee = fee * 3n; // Should be 0
     const totalAmount = totalDepositAmount + stakefishFee;
 
     await expect(
@@ -152,53 +152,14 @@ describe("MultipleDeposits", function () {
     ).to.be.revertedWith("BatchDeposit: Amount is too low");
   });
 
-  it("should revert if amount exceeds maximum", async function () {
-    const amounts = [
-      ethers.parseEther("2049"), // 2049 ETH (above maximum)
-      ethers.parseEther("32"),
-      ethers.parseEther("64"),
-    ];
-    const totalDepositAmount = amounts.reduce((a, b) => a + b, 0n);
-    const stakefishFee = fee * 3n;
-    const totalAmount = totalDepositAmount + stakefishFee;
-
-    await expect(
-      contract
-        .connect(addr2)
-        .batchDeposit(
-          "0x" +
-            [
-              depositData["32"].pubkey.slice(2),
-              depositData["32"].pubkey.slice(2),
-              depositData["64"].pubkey.slice(2),
-            ].join(""),
-          depositData["32"].creds,
-          "0x" +
-            [
-              depositData["32"].signature.slice(2),
-              depositData["32"].signature.slice(2),
-              depositData["64"].signature.slice(2),
-            ].join(""),
-          [
-            depositData["32"].dataRoots,
-            depositData["32"].dataRoots,
-            depositData["64"].dataRoots,
-          ],
-          amounts,
-          {
-            value: totalAmount,
-          },
-        ),
-    ).to.be.revertedWith("BatchDeposit: Amount exceeds maximum");
-  });
-
-  it("should revert if fee is missing", async function () {
+  it("should revert if sent value doesn't match deposit amounts with zero fee", async function () {
     const amounts = [
       ethers.parseEther("32"),
       ethers.parseEther("64"),
       ethers.parseEther("128"),
     ];
     const totalDepositAmount = amounts.reduce((a, b) => a + b, 0n);
+    const incorrectAmount = totalDepositAmount + ethers.parseEther("1"); // Add 1 ETH extra
 
     await expect(
       contract
@@ -224,7 +185,7 @@ describe("MultipleDeposits", function () {
           ],
           amounts,
           {
-            value: totalDepositAmount,
+            value: incorrectAmount,
           },
         ),
     ).to.be.revertedWith(
@@ -232,85 +193,13 @@ describe("MultipleDeposits", function () {
     );
   });
 
-  it("should change owner", async function () {
-    // check owner is correct
-    expect(await contract.owner()).to.equal(owner.address);
+  it("should have no fees to withdraw", async function () {
+    const balance = await ethers.provider.getBalance(contract.target);
+    expect(balance).to.equal(0n);
 
-    // transfer ownership to addr2
-    await contract.connect(owner).transferOwnership(addr2.address);
+    await contract.connect(owner).withdraw(addr2.address);
 
-    // check owner is addr2
-    expect(await contract.owner()).to.equal(addr2.address);
-  });
-
-  it("should not withdraw", async function () {
-    await expect(
-      contract.connect(addr1).withdraw(addr6.address),
-    ).to.be.revertedWithCustomError(contract, "OwnableUnauthorizedAccount");
-  });
-
-  it("should withdraw the fees", async function () {
-    const fees = await ethers.provider.getBalance(contract.target);
-    const curBal = await ethers.provider.getBalance(addr6.address);
-
-    const tx = await contract.connect(owner).withdraw(addr6.address);
-    const receipt = await tx.wait();
-    expect(receipt.logs.length).to.equal(1);
-
-    // Check that we have fee in the contract balance
-    const newContractBal = await ethers.provider.getBalance(contract.target);
-    expect(newContractBal).to.equal(0n);
-
-    const newBal = await ethers.provider.getBalance(addr6.address);
-    const diff = newBal - curBal;
-    expect(diff).to.equal(fees);
-  });
-
-  it("should handle deposits when amounts order doesn't match other arrays", async function () {
-    // Create arrays with different orders
-    const amounts = [
-      ethers.parseEther("128"), // 128 ETH
-      ethers.parseEther("32"), // 32 ETH
-      ethers.parseEther("64"), // 64 ETH
-    ];
-    const totalDepositAmount = amounts.reduce((a, b) => a + b, 0n);
-    const stakefishFee = fee * 3n;
-    const totalAmount = totalDepositAmount + stakefishFee;
-
-    // Create arrays for pubkeys and signatures in original order
-    const pubkeys = [
-      depositData["32"].pubkey.slice(2),
-      depositData["64"].pubkey.slice(2),
-      depositData["128"].pubkey.slice(2),
-    ].join("");
-
-    const signatures = [
-      depositData["32"].signature.slice(2),
-      depositData["64"].signature.slice(2),
-      depositData["128"].signature.slice(2),
-    ].join("");
-
-    const dataRoots = [
-      depositData["32"].dataRoots,
-      depositData["64"].dataRoots,
-      depositData["128"].dataRoots,
-    ];
-
-    await expect(
-      contract
-        .connect(addr1)
-        .batchDeposit(
-          "0x" + pubkeys,
-          depositData["32"].creds,
-          "0x" + signatures,
-          dataRoots,
-          amounts,
-          {
-            value: totalAmount,
-          },
-        ),
-    ).to.be.revertedWith(
-      "DepositContract: reconstructed DepositData does not match supplied deposit_data_root",
-    );
+    const newBalance = await ethers.provider.getBalance(contract.target);
+    expect(newBalance).to.equal(0n);
   });
 });
