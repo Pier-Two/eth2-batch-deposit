@@ -1,23 +1,5 @@
-//                                                                           ,,---.
-//                                                                         .-^^,_  `.
-//                                                                    ;`, / 3 ( o\   }
-//         __             __                     ___              __  \  ;   \`, /  ,'
-//        /\ \__         /\ \                  /'___\ __         /\ \ ;_/^`.__.-"  ,'
-//    ____\ \ ,_\    __  \ \ \/'\      __     /\ \__//\_\    ____\ \ \___     `---'
-//   /',__\\ \ \/  /'__`\ \ \ , <    /'__`\   \ \ ,__\/\ \  /',__\\ \  _ `\
-//  /\__, `\\ \ \_/\ \L\.\_\ \ \\`\ /\  __/  __\ \ \_/\ \ \/\__, `\\ \ \ \ \
-//  \/\____/ \ \__\ \__/.\_\\ \_\ \_\ \____\/\_\\ \_\  \ \_\/\____/ \ \_\ \_\
-//   \/___/   \/__/\/__/\/_/ \/_/\/_/\/____/\/_/ \/_/   \/_/\/___/   \/_/\/_/
-//
-// stakefish Eth2 Batch Deposit contract
-//
-// ### WARNING ###
-// DO NOT USE THIS CONTRACT DIRECTLY. THIS CONTRACT IS ONLY TO BE USED 
-// BY STAKING VIA stakefish's WEBSITE LOCATED AT: https://stake.fish
-//
 // This contract allows deposit of multiple validators in one transaction
-// and also collects the validator service fee for stakefish
-//
+// This contract is a fork of https://github.com/stakefish/eth2-batch-deposit with fee collection removed
 // SPDX-License-Identifier: Apache-2.0
 
 pragma solidity 0.8.29;
@@ -63,7 +45,6 @@ interface IDepositContract {
 contract BatchDeposit is Pausable, Ownable {
     using Math for uint256;
     address depositContract;
-    uint256 private _fee;
 
     uint256 constant PUBKEY_LENGTH = 48;
     uint256 constant SIGNATURE_LENGTH = 96;
@@ -72,19 +53,14 @@ contract BatchDeposit is Pausable, Ownable {
     uint256 constant MAX_DEPOSIT_AMOUNT = 2048 ether;
     uint256 constant MIN_DEPOSIT_AMOUNT = 32 ether;
 
-    event FeeChanged(uint256 previousFee, uint256 newFee);
     event Withdrawn(address indexed payee, uint256 weiAmount);
-    event FeeCollected(address indexed payee, uint256 weiAmount);
 
-    constructor(address depositContractAddr, uint256 initialFee) Pausable() Ownable(msg.sender) {
-        require(initialFee % 1 gwei == 0, "Fee must be a multiple of GWEI");
-
+    constructor(address depositContractAddr) Pausable() Ownable(msg.sender) {
         depositContract = depositContractAddr;
-        _fee = initialFee;
     }
 
     /**
-     * @dev Performs a batch deposit, asking for an additional fee payment.
+     * @dev Performs a batch deposit
      * @param pubkeys Array of validator public keys
      * @param withdrawal_credentials Withdrawal credentials for all validators
      * @param signatures Array of validator signatures
@@ -120,10 +96,9 @@ contract BatchDeposit is Pausable, Ownable {
             totalDepositAmount += amounts[i];
         }
 
-        uint256 expectedAmount = totalDepositAmount + (_fee * count);
+        uint256 expectedAmount = totalDepositAmount;
         require(msg.value == expectedAmount, "BatchDeposit: Amount is not aligned with validator amounts");
 
-        emit FeeCollected(msg.sender, _fee * count);
 
         _processDeposits(pubkeys, withdrawal_credentials, signatures, deposit_data_roots, amounts);
     }
@@ -153,32 +128,6 @@ contract BatchDeposit is Pausable, Ownable {
     }
 
     /**
-     * @dev Withdraw accumulated fee in the contract
-     *
-     * @param receiver The address where all accumulated funds will be transferred to.
-     * Can only be called by the current owner.
-     */
-    function withdraw(address payable receiver) public onlyOwner {       
-        require(receiver != address(0), "You can't burn these eth directly");
-
-        uint256 amount = address(this).balance;
-        emit Withdrawn(receiver, amount);
-        receiver.transfer(amount);
-    }
-
-    /**
-     * @dev Change the validator fee (`newOwner`).
-     * Can only be called by the current owner.
-     */
-    function changeFee(uint256 newFee) public onlyOwner {
-        require(newFee != _fee, "Fee must be different from current one");
-        require(newFee % 1 gwei == 0, "Fee must be a multiple of GWEI");
-
-        emit FeeChanged(_fee, newFee);
-        _fee = newFee;
-    }
-
-    /**
      * @dev Triggers stopped state.
      *
      * Requirements:
@@ -200,13 +149,6 @@ contract BatchDeposit is Pausable, Ownable {
         _unpause();
     }
 
-    /**
-     * @dev Returns the current fee
-     */
-    function fee() public view returns (uint256) {
-        return _fee;
-    }
-  
     /**
      * Disable renunce ownership
      */

@@ -1,9 +1,6 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-// 1 gwei fee
-const fee = ethers.parseUnits("1", "gwei");
-
 describe("Pausable", function () {
   let contract;
   let depositContract;
@@ -21,8 +18,7 @@ describe("Pausable", function () {
 
     const BatchDeposit = await ethers.getContractFactory("BatchDeposit");
     contract = await BatchDeposit.deploy(
-      await depositContract.getAddress(),
-      fee,
+      await depositContract.getAddress()
     );
     await contract.waitForDeployment();
   });
@@ -60,7 +56,7 @@ describe("Pausable", function () {
           ],
           amounts,
           {
-            value: ethers.parseEther("32") + fee,
+            value: ethers.parseEther("32"),
           },
         ),
     ).to.be.revertedWithCustomError(contract, "EnforcedPause");

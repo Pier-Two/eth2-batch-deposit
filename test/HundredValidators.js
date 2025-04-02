@@ -11,9 +11,6 @@ const { ethers } = require("hardhat");
 // const assert = require("chai").assert;
 // const truffleAssert = require("truffle-assertions");
 
-// 1 gwei fee
-const fee = ethers.parseUnits("1", "gwei");
-
 // Fake deposits for different amounts
 const depositData = {
   32: {
@@ -61,8 +58,7 @@ describe("HundredValidators", function () {
 
     const BatchDeposit = await ethers.getContractFactory("BatchDeposit");
     contract = await BatchDeposit.deploy(
-      await depositContract.getAddress(),
-      fee,
+      await depositContract.getAddress()
     );
     await contract.waitForDeployment();
   });
@@ -80,8 +76,7 @@ describe("HundredValidators", function () {
       totalDepositAmount += amount;
     }
 
-    const stakefishFee = fee * 100n;
-    const totalAmount = totalDepositAmount + stakefishFee;
+    const totalAmount = totalDepositAmount
 
     // Create arrays for pubkeys and signatures
     const pubkeys = Array(100)
@@ -121,11 +116,11 @@ describe("HundredValidators", function () {
       );
 
     const receipt = await tx.wait();
-    expect(receipt.logs.length).to.equal(101);
+    expect(receipt.logs.length).to.equal(100);
 
-    // Check that we have fee in the contract balance
+    // Confirm that no fee was collected
     const balance = await ethers.provider.getBalance(contract.target);
-    expect(balance).to.equal(stakefishFee);
+    expect(balance).to.equal(0); // No fee collected
 
     // check owner is correct
     expect(await contract.owner()).to.equal(owner.address);
